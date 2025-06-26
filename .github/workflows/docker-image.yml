@@ -1,68 +1,74 @@
-# .github/workflows/deploy.yml
-# 🚀 CI/CD: Build + Análisis SonarQube + Despliegue Docker Compose
-
-name: CI/CD with SonarQube and Docker
+name: 🚀 CI/CD con SonarQube y Docker
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
-env:
-  DOCKER_PROJECT_NAME: 'exam'
-  APP_CONTAINER_NAME: 'product_app'
-
 jobs:
-  build-and-deploy:
-    name: Build, Analyze and Deploy
+  build-analyze-deploy:
+    name: 🔁 Build + Análisis + Despliegue
     runs-on: self-hosted
 
     steps:
-      - name: 🧾 Checkout del repositorio
-        uses: actions/checkout@v4
+      - name: 📥 Paso 1 - Clonar repositorio
+        uses: actions/checkout@v3
 
-      - name: ⚙️ Configurar Java
-        uses: actions/setup-java@v4
+      - name: ☕ Paso 2 - Instalar Java y Maven
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
 
-      - name: 🏗️ Compilar proyecto con Maven
-        run: mvn -B clean package -DskipTests
+      - name: 🧪 Paso 3 - Compilar con Maven
+        run: |
+          echo "📦 Compilando proyecto..."
+          mvn clean package -DskipTests
+          echo "✅ Build completado."
 
-      - name: 🔍 Análisis estático con SonarQube
+      - name: 📊 Paso 4 - Análisis con SonarQube
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
+          echo "🔍 Ejecutando análisis SonarQube..."
           mvn sonar:sonar \
-            -Dsonar.projectKey=exam \
+            -Dsonar.projectKey=lpapp \
+            -Dsonar.projectName=lpapp \
             -Dsonar.host.url=http://localhost:9000 \
-            -Dsonar.login=${SONAR_TOKEN}
+            -Dsonar.login=$SONAR_TOKEN
+          echo "✅ Análisis completado."
 
-      - name: 🐳 Desplegar con Docker Compose
+      - name: 🐳 Paso 5 - Desplegar con Docker Compose
         run: |
-          echo "✅ Iniciando despliegue en runner local..."
+          echo "🧹 Apagando contenedores anteriores si existen..."
+          docker compose -f docker/docker-compose.yml down -v --remove-orphans || echo "⚠ No se pudo bajar contenedores"
 
-          cd docker
+          echo "🚀 Iniciando nuevo despliegue..."
+          docker compose -f docker/docker-compose.yml up -d --build || echo "❌ Error en docker-compose up"
 
-          echo "🧹 Limpiando despliegue anterior..."
-          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} down -v --remove-orphans || echo "No hay contenedores previos."
+          echo "⏳ Esperando 15 segundos para que la app arranque..."
+          sleep 15
 
-          echo "🏗️ Levantando contenedor de la app..."
-          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} up -d --build
+          echo "📋 Contenedores activos:"
+          docker ps
 
-          echo "🔍 Estado de los contenedores:"
-          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} ps
-
-          echo "📄 Últimos logs de la app:"
-          CONTAINER_NAME=$(docker ps --filter "name=${{ env.APP_CONTAINER_NAME }}" --format "{{.Names}}" | head -n 1)
+          echo "📝 Logs recientes del contenedor:"
+          CONTAINER_NAME=$(docker ps --filter "name=product_app" --format "{{.Names}}" | head -n 1)
           if [ -n "$CONTAINER_NAME" ]; then
-            docker logs --tail 100 "$CONTAINER_NAME"
+            docker logs --tail 50 "$CONTAINER_NAME"
           else
-            echo "⚠️ No se encontró ningún contenedor llamado ${APP_CONTAINER_NAME}"
+            echo "⚠ No se encontró ningún contenedor con nombre product_app"
           fi
 
-          echo "🌐 Verificando si la app responde..."
-          sleep 5
-          curl --fail http://localhost:8080 || echo "⚠️ La app no respondió en el puerto 8080"
+          echo "🌐 Verificando si la app responde en http://localhost:8080 ..."
+          for i in {1..5}; do
+            if curl --fail http://localhost:8080; then
+              echo "✅ La app respondió correctamente."
+              break
+            else
+              echo "⏳ Intento $i: esperando respuesta de la app..."
+              sleep 5
+            fi
+          done
