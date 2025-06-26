@@ -1,5 +1,5 @@
 # .github/workflows/deploy.yml
-# 🚀 Pipeline CI/CD con SonarQube y despliegue en Docker (Self-Hosted Runner)
+# 🚀 CI/CD: Build + Análisis SonarQube + Despliegue Docker Compose
 
 name: CI/CD with SonarQube and Docker
 
@@ -40,26 +40,29 @@ jobs:
             -Dsonar.host.url=http://localhost:9000 \
             -Dsonar.login=${SONAR_TOKEN}
 
-            - name: 🐳 Desplegar con Docker Compose
-              run: |
-                echo "✅ Iniciando despliegue en runner local..."
-      
-                cd docker
-      
-                echo "🧹 Limpiando despliegue anterior..."
-                docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} down -v --remove-orphans || echo "No hay contenedores previos."
-      
-                echo "🏗️ Levantando contenedor de la app..."
-                docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} up -d --build
-      
-                echo "🔍 Estado de los contenedores:"
-                docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} ps
-      
-                echo "📄 Últimos logs de la app:"
-                CONTAINER_NAME=$(docker ps --filter "name=product_app" --format "{{.Names}}" | head -n 1)
-                if [ -n "$CONTAINER_NAME" ]; then
-                  docker logs --tail 100 "$CONTAINER_NAME"
-                else
-                  echo "⚠️ No se encontró ningún contenedor llamado product_app"
-                fi
+      - name: 🐳 Desplegar con Docker Compose
+        run: |
+          echo "✅ Iniciando despliegue en runner local..."
 
+          cd docker
+
+          echo "🧹 Limpiando despliegue anterior..."
+          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} down -v --remove-orphans || echo "No hay contenedores previos."
+
+          echo "🏗️ Levantando contenedor de la app..."
+          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} up -d --build
+
+          echo "🔍 Estado de los contenedores:"
+          docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} ps
+
+          echo "📄 Últimos logs de la app:"
+          CONTAINER_NAME=$(docker ps --filter "name=${{ env.APP_CONTAINER_NAME }}" --format "{{.Names}}" | head -n 1)
+          if [ -n "$CONTAINER_NAME" ]; then
+            docker logs --tail 100 "$CONTAINER_NAME"
+          else
+            echo "⚠️ No se encontró ningún contenedor llamado ${APP_CONTAINER_NAME}"
+          fi
+
+          echo "🌐 Verificando si la app responde..."
+          sleep 5
+          curl --fail http://localhost:8080 || echo "⚠️ La app no respondió en el puerto 8080"
