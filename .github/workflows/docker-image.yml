@@ -56,4 +56,5 @@ jobs:
           docker-compose -p ${{ env.DOCKER_PROJECT_NAME }} ps
 
           echo "📄 Últimos logs de la app:"
-          docker logs --tail 50 ${{ env.APP_CONTAINER_NAME }}
+          docker logs --tail 100 $(docker ps --filter "name=product_app" --format "{{.Names}}")
+
